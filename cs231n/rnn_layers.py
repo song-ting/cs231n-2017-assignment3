@@ -2,7 +2,6 @@ from __future__ import print_function, division
 from builtins import range
 import numpy as np
 
-
 """
 This file defines layer types that are commonly used for recurrent neural
 networks.
@@ -34,7 +33,8 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     # hidden state and any values you need for the backward pass in the next_h   #
     # and cache variables respectively.                                          #
     ##############################################################################
-    pass
+    next_h = np.tanh(np.dot(prev_h, Wh) + np.dot(x, Wx) + b)  # shape (N, H)
+    cache = (x, prev_h, Wx, Wh, next_h)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -63,7 +63,14 @@ def rnn_step_backward(dnext_h, cache):
     # HINT: For the tanh function, you can compute the local derivative in terms #
     # of the output value from tanh.                                             #
     ##############################################################################
-    pass
+    (x, prev_h, Wx, Wh, next_h) = cache
+    # tanh's derivative : tanh(x)' = 1 - tanh(x)^2
+    dnext_h_in = dnext_h * (1 - (next_h ** 2))  # shape (N, H)
+    dx = np.dot(dnext_h_in, Wx.T)  # shape (N, D)
+    dprev_h = np.dot(dnext_h_in, Wh.T)  # shape (N, H)
+    dWx = np.dot(x.T, dnext_h_in)  # shape (D, H)
+    dWh = np.dot(prev_h.T, dnext_h_in)  # shape (H, H)
+    db = np.sum(dnext_h_in, axis=0)  # shape (H,)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -94,7 +101,18 @@ def rnn_forward(x, h0, Wx, Wh, b):
     # input data. You should use the rnn_step_forward function that you defined  #
     # above. You can use a for loop to help compute the forward pass.            #
     ##############################################################################
-    pass
+    N, T, _ = x.shape
+    _, H = h0.shape
+    h = np.zeros((N, T, H))
+    prev_h = h0  # shape (N, H)
+    cache = []  # list of cache
+
+    for t in range(T):
+        h[:, t, :], cache_t = rnn_step_forward(x[:, t, :], prev_h, Wx, Wh, b)
+        prev_h = h[:, t, :]
+        # cache[t] = (x, prev_h, Wx, Wh, next_h)
+        cache.append(cache_t)
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -121,7 +139,23 @@ def rnn_backward(dh, cache):
     # sequence of data. You should use the rnn_step_backward function that you   #
     # defined above. You can use a for loop to help compute the backward pass.   #
     ##############################################################################
-    pass
+    (N, T, H) = dh.shape
+    # cache[t] = (x, prev_h, Wx, Wh, next_h)
+    D = cache[0][0].shape[1]
+    dx = np.zeros((N, T, D))
+    dWx = np.zeros((D, H))
+    dWh = np.zeros((H, H))
+    db = np.zeros((H))
+    dnext_h = dh[:, -1, :]
+
+    for t in range(T - 1, -1, -1):
+        dx[:, t, :], dprev_h, dWx_t, dWh_t, db_t = rnn_step_backward(dnext_h, cache[t])
+        if t > 0:
+            dnext_h = dh[:, t - 1, :] + dprev_h
+        dWx += dWx_t
+        dWh += dWh_t
+        db += db_t
+    dh0 = dprev_h
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -249,7 +283,7 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     - dWh: Gradient of hidden-to-hidden weights, of shape (H, 4H)
     - db: Gradient of biases, of shape (4H,)
     """
-    dx, dh, dc, dWx, dWh, db = None, None, None, None, None, None
+    dx, dprev_h, dprev_c, dWx, dWh, db = None, None, None, None, None, None
     #############################################################################
     # TODO: Implement the backward pass for a single timestep of an LSTM.       #
     #                                                                           #
